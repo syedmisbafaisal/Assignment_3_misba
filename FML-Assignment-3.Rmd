@@ -1,0 +1,127 @@
+---
+title: "FML-ASSIGN-3-M10"
+author: "Misba Faisal"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r}
+library(caret)
+library(dplyr)
+library(ggplot2)
+library(lattice)
+library(knitr)
+library(rmarkdown)
+library(e1071)
+```
+Extracting Data from Universal bank data sheet which is in the form of .csv
+```{r}
+getwd()
+setwd("C:/Users/Syed's/OneDrive/Documents/FML")
+Og <- read.csv("UniversalBank.csv")
+Uni_bank <- Og %>% select(Age, Experience, Income, Family, CCAvg, Education, Mortgage, Personal.Loan, Securities.Account, CD.Account, Online, CreditCard)
+Uni_bank$Creditcard <- as.factor(Uni_bank$CreditCard)
+Uni_bank$Personal.Loan <- as.factor(Uni_bank$Personal.Loan)
+Uni_bank$Online <- as.factor(Uni_bank$Online)
+```
+
+
+Removing ID Number and ZipCode
+##Create Partition
+```{r}
+selected.var <- c(8, 11, 12)
+set.seed(078)
+
+Train_Index <- createDataPartition(Uni_bank$Personal.Loan, p = 0.60, list = FALSE)
+
+Train_Data <- Uni_bank[Train_Index, selected.var]
+Validation_Data <- Uni_bank[-Train_Index, selected.var]
+```
+
+Data partition is created, Now lets train and validate the data.
+##A
+
+```{r}
+attach(Train_Data)
+ftable(CreditCard,Personal.Loan,Online)
+detach(Train_Data)
+```
+
+
+Pivot table is done.
+##B (probability not using Naive Bayes)
+ With Online=1 and CC=1, we can calculate that Loan=1 by , we add 56(Loan=1 from ftable) and 483(Loan=0 from ftable) which gives us 539. So the probability is 56/(56+483) =56/539 = 0.10389 or 10.38%  . Hence the probability is 10.38%
+ 
+```{r}
+prop.table(ftable(Train_Data$CreditCard,Train_Data$Online,Train_Data$Personal.Loan),margin=1)
+```
+
+The above code gave us a good pivot table which can help us to find #B and with we can easily find out the chance of getting loan for online users.
+
+
+##C
+
+```{r}
+attach(Train_Data)
+ftable(Personal.Loan,Online)
+ftable(Personal.Loan,CreditCard)
+detach(Train_Data)
+summary
+```
+The both table are helpful to find D.pivot table is mandatory for C to be written. The first is a column with Online as a column and Loans and while the second is a column with Credit Cards.
+
+#D
+```{r}
+
+prop.table(ftable(Train_Data$Personal.Loan,Train_Data$CreditCard),margin=1)
+prop.table(ftable(Train_Data$Personal.Loan,Train_Data$Online),margin=1)
+
+```
+According to question quantities are:
+i)92/288 = 0.3194 or 31.94%
+ii) 167/288 = 0.5798 or 57.986%
+iii)total loans= 1 from table (288) is now divided by total count from table (3000) = 0.096 or 9.6%
+iv)812/2712 = 0.2994 or 29.94%
+v)1624/2712 = 0.5988 or 59.88%
+vi)total loans=0 from table(2712) which is divided by total count from table (3000) = 0.904 or 90.4%
+##E Naive calculation.
+(0.3194 * 0.5798 * 0.096)/[(0.3194 * 0.5798 * 0.096)+(0.2994 * 0.5988 * 0.904)]
+    = 0.0988505642823701 or 9.885%
+    
+    
+##F 
+ Employer B has direct computation according to count and for employer E is based on probabilty count.In the end E is generailsed and B is precise.
+ 
+ 
+##G
+
+
+```{r}
+Universal.nb <- naiveBayes(Personal.Loan ~ ., data = Train_Data)
+Universal.nb
+```
+You may quickly compute P(LOAN=1|CC=1,Online=1) without using the Naive Bayes model by using the pivot table constructed in step B, even though using the two tables generated in step C makes it easier to understand how you're computing P(LOAN=1|CC=1,Online=1) using the Naive Bayes model.
+While it is less than the probability manually determined in step E, the Naive Bayes model predicts the same probability as the earlier methods. This likelihood is more in line with the figure determined in step B. This might be because we are performing the calculations by hand in step E, which allows for error when rounding fractions and produces only an estimate.
+
+#NB confusion matrix for Train_Data
+```{r}
+pred.class <- predict(Universal.nb, newdata = Train_Data)
+confusionMatrix(pred.class, Train_Data$Personal.Loan)
+```
+This model is very sensitive as we have many numbers of zero(0), instead of one(1).That is why the the percentage of accuracy is 90.4%
+
+##Validation set
+```{r}
+pred.prob <- predict(Universal.nb, newdata=Validation_Data, type="raw")
+pred.class <- predict(Universal.nb, newdata = Validation_Data)
+confusionMatrix(pred.class, Validation_Data$Personal.Loan)
+```
+Graphical presentation and assume what is the best of it.
+
+#ROC
+```{r}
+library(pROC)
+roc(Validation_Data$Personal.Loan,pred.prob[,1])
+plot.roc(Validation_Data$Personal.Loan,pred.prob[,1],print.thres="best")
+```
+By this chat we can clearly say that assumption of 0.904 can be improved by lowering sensitivity to 1% and specificity to 0. 
